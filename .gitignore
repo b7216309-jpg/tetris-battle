@@ -1,0 +1,21 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+shared/node_modules/
+client/dist/
+.env
+*.log
+.DS_Store
+Thumbs.db
+
+# Claude Code project files
+.claude/
+
+# Screenshots / test artifacts
+*.png
+*.jpg
+playwright-report/
+test-results/
+
+# Root-level duplicate mp3
+/background.mp3
