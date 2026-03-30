@@ -44,7 +44,7 @@ app.get('/health', (req, res) => {
 // SPA fallback (must be after /health)
 if (IS_PRODUCTION) {
   const clientDist = path.resolve(__dirname, '../../client/dist');
-  app.get('*', (req, res) => {
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
