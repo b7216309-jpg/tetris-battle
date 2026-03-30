@@ -3,18 +3,43 @@ import { DAS, ARR } from '@shared/constants.js';
 const MAX_ARR_MOVES_PER_FRAME = 10;
 const MAX_EFFECTIVE_DELTA = 50; // Cap deltaMs to prevent lag spike bursts
 
+const STORAGE_KEY = 'tetris-keybindings';
+
+const DEFAULT_BINDINGS = {
+  moveLeft: 'ArrowLeft',
+  moveRight: 'ArrowRight',
+  softDrop: 'ArrowDown',
+  hardDrop: 'Space',
+  rotateCW: 'ArrowUp',
+  rotateCCW: 'KeyZ',
+  rotate180: 'KeyA',
+  hold: 'KeyC'
+};
+
 export class InputHandler {
-  constructor() {
-    this.bindings = {
-      moveLeft: 'ArrowLeft',
-      moveRight: 'ArrowRight',
-      softDrop: 'ArrowDown',
-      hardDrop: 'Space',
-      rotateCW: 'ArrowUp',
-      rotateCCW: 'KeyZ',
-      rotate180: 'KeyA',
-      hold: 'KeyC'
+  static DEFAULT_BINDINGS = DEFAULT_BINDINGS;
+
+  static getKeyLabel(code) {
+    if (!code) return '???';
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    if (code.startsWith('Numpad')) return 'NUM ' + code.slice(6);
+    const map = {
+      ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN',
+      Space: 'SPACE', ShiftLeft: 'L-SHIFT', ShiftRight: 'R-SHIFT',
+      ControlLeft: 'L-CTRL', ControlRight: 'R-CTRL',
+      AltLeft: 'L-ALT', AltRight: 'R-ALT',
+      Enter: 'ENTER', Backspace: 'BACKSPACE', Tab: 'TAB',
+      CapsLock: 'CAPS', Escape: 'ESC',
+      Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/',
+      BracketLeft: '[', BracketRight: ']', Backquote: '`', Minus: '-', Equal: '=',
+      Backslash: '\\'
     };
+    return map[code] || code;
+  }
+
+  constructor() {
+    this.bindings = this._loadBindings();
 
     this.keysDown = new Set();
     this.keysJustPressed = new Set();
@@ -203,5 +228,40 @@ export class InputHandler {
 
   getActions() {
     return this.actions;
+  }
+
+  _loadBindings() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Validate: must have all expected keys
+        const result = { ...DEFAULT_BINDINGS };
+        for (const key of Object.keys(DEFAULT_BINDINGS)) {
+          if (typeof parsed[key] === 'string') result[key] = parsed[key];
+        }
+        return result;
+      }
+    } catch { /* ignore corrupt data */ }
+    return { ...DEFAULT_BINDINGS };
+  }
+
+  saveBindings() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.bindings));
+  }
+
+  setBinding(action, keyCode) {
+    // Swap if another action already uses this key
+    const existing = Object.entries(this.bindings).find(([, v]) => v === keyCode);
+    if (existing && existing[0] !== action) {
+      this.bindings[existing[0]] = this.bindings[action];
+    }
+    this.bindings[action] = keyCode;
+    this.saveBindings();
+  }
+
+  resetBindings() {
+    this.bindings = { ...DEFAULT_BINDINGS };
+    this.saveBindings();
   }
 }

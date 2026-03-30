@@ -1,4 +1,16 @@
 import './ui.css';
+import { InputHandler } from '../game/InputHandler.js';
+
+const ACTION_LABELS = {
+  moveLeft: 'MOVE LEFT',
+  moveRight: 'MOVE RIGHT',
+  softDrop: 'SOFT DROP',
+  hardDrop: 'HARD DROP',
+  rotateCW: 'ROTATE CW',
+  rotateCCW: 'ROTATE CCW',
+  rotate180: 'ROTATE 180',
+  hold: 'HOLD'
+};
 
 export class UIManager {
   constructor(gameManager) {
@@ -6,6 +18,8 @@ export class UIManager {
     this.currentScreen = null;
     this._flashTimer = null;
     this._errorTimer = null;
+    this._listeningAction = null;
+    this._rebindHandler = null;
 
     this._createOverlay();
     this._bindEvents();
@@ -24,6 +38,19 @@ export class UIManager {
         <div class="subtitle">BATTLE</div>
         <button class="btn" id="btn-play-online">PLAY ONLINE</button>
         <button class="btn btn-secondary" id="btn-practice">PRACTICE</button>
+        <button class="btn btn-secondary" id="btn-controls">CONTROLS</button>
+      </div>
+
+      <!-- Controls Screen -->
+      <div id="controls-screen" class="screen">
+        <div class="controls-container">
+          <div class="screen-title">CONTROLS</div>
+          <div class="controls-list" id="controls-list"></div>
+          <div class="button-row">
+            <button class="btn btn-danger" id="btn-controls-reset">RESET</button>
+            <button class="btn btn-secondary" id="btn-controls-back">BACK</button>
+          </div>
+        </div>
       </div>
 
       <!-- Online Menu Screen -->
@@ -246,6 +273,23 @@ export class UIManager {
       this.game.startSolo();
     });
 
+    // Controls screen
+    this.overlay.querySelector('#btn-controls').addEventListener('click', () => {
+      this._renderControlsList();
+      this.showScreen('controls');
+    });
+
+    this.overlay.querySelector('#btn-controls-back').addEventListener('click', () => {
+      this._stopListening();
+      this.showScreen('title');
+    });
+
+    this.overlay.querySelector('#btn-controls-reset').addEventListener('click', () => {
+      this.game.inputHandler.resetBindings();
+      this._stopListening();
+      this._renderControlsList();
+    });
+
     // Online menu
     this.overlay.querySelector('#btn-quick-match').addEventListener('click', () => {
       this.game.startQuickMatch();
@@ -463,6 +507,62 @@ export class UIManager {
         this.overlay.querySelector('#stat-pieces').textContent = engine.piecesPlaced;
       }
     };
+  }
+
+  // --- Controls Screen ---
+
+  _renderControlsList() {
+    const list = this.overlay.querySelector('#controls-list');
+    const bindings = this.game.inputHandler.bindings;
+
+    list.innerHTML = Object.keys(ACTION_LABELS).map(action => `
+      <div class="controls-row">
+        <span class="controls-action">${ACTION_LABELS[action]}</span>
+        <button class="key-btn" data-action="${action}">${InputHandler.getKeyLabel(bindings[action])}</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.key-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._startListening(btn.dataset.action);
+      });
+    });
+  }
+
+  _startListening(action) {
+    this._stopListening();
+    this._listeningAction = action;
+
+    const btn = this.overlay.querySelector(`.key-btn[data-action="${action}"]`);
+    if (btn) {
+      btn.classList.add('listening');
+      btn.textContent = '...';
+    }
+
+    this._rebindHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.code === 'Escape') {
+        this._stopListening();
+        this._renderControlsList();
+        return;
+      }
+
+      this.game.inputHandler.setBinding(action, e.code);
+      this._stopListening();
+      this._renderControlsList();
+    };
+
+    window.addEventListener('keydown', this._rebindHandler, true);
+  }
+
+  _stopListening() {
+    if (this._rebindHandler) {
+      window.removeEventListener('keydown', this._rebindHandler, true);
+      this._rebindHandler = null;
+    }
+    this._listeningAction = null;
   }
 
   // --- Room Lobby ---
