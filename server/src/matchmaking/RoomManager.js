@@ -29,8 +29,8 @@ export class RoomManager {
     return null;
   }
 
-  _validateOptions(raw) {
-    const opts = { ...DEFAULT_ROOM_OPTIONS };
+  _validateOptions(raw = {}, baseOptions = DEFAULT_ROOM_OPTIONS) {
+    const opts = { ...DEFAULT_ROOM_OPTIONS, ...baseOptions };
     if (raw.startingLevel !== undefined) {
       opts.startingLevel = Math.max(1, Math.min(15, Math.floor(Number(raw.startingLevel)) || 1));
     }
@@ -188,7 +188,7 @@ export class RoomManager {
 
     if (room.state === 'PLAYING') return;
 
-    room.options = this._validateOptions(rawOptions);
+    room.options = this._validateOptions(rawOptions, room.options);
 
     // Un-ready guest when options change
     room.guestReady = false;

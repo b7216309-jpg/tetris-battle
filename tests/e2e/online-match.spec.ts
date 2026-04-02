@@ -23,6 +23,11 @@ test('two players can start an online match and play', async ({ browser }) => {
   ]);
 
   await Promise.all([
+    page1.locator('#btn-quick-match').click(),
+    page2.locator('#btn-quick-match').click()
+  ]);
+
+  await Promise.all([
     expect(page1.locator('#countdown-screen')).toHaveClass(/active/, { timeout: 15_000 }),
     expect(page2.locator('#countdown-screen')).toHaveClass(/active/, { timeout: 15_000 })
   ]);

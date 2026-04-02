@@ -59,6 +59,7 @@ export class GameManager {
     this.pendingInputs = [];
     this.inputSequence = 0;
     this.opponentState = null;
+    this.opponentEffects = null;
     this.pendingGarbage = 0;
     this.effectState = this._createEffectState();
 
@@ -216,6 +217,7 @@ export class GameManager {
     this.pendingInputs = [];
     this.inputSequence = 0;
     this.opponentState = null;
+    this.opponentEffects = null;
     this.pendingGarbage = 0;
     this._lastStats = null;
     this._syncLocalEffects();
@@ -358,6 +360,10 @@ export class GameManager {
 
   _isPreviewMasked() {
     return Date.now() < this.effectState.previewMaskedUntil;
+  }
+
+  _isOpponentPreviewMasked() {
+    return Boolean(this.opponentEffects && this.opponentEffects.previewMaskedMs > 0);
   }
 
   // --- HUD Positioning ---
@@ -505,14 +511,24 @@ export class GameManager {
     }
   }
 
-  _processAction(action) {
+  _processAction(action, options = {}) {
     if (!this.localEngine || !this.localEngine.isAlive) return;
-    void this.audio.resume();
+    const {
+      sendNetwork = this.isMultiplayer,
+      emitFeedback = true,
+      resumeAudio = true
+    } = options;
+
+    if (resumeAudio) {
+      void this.audio.resume();
+    }
+
+    let lockResult = null;
 
     switch (action.type) {
       case 'move':
         this.localEngine.movePiece(action.dx, 0);
-        if (this.isMultiplayer) this._sendInput(action);
+        if (sendNetwork) this._sendInput(action);
         break;
 
       case 'moveToWall': {
@@ -520,31 +536,33 @@ export class GameManager {
         while (moved) {
           moved = this.localEngine.movePiece(action.dx, 0);
         }
-        if (this.isMultiplayer) this._sendInput(action);
+        if (sendNetwork) this._sendInput(action);
         break;
       }
 
       case 'rotate':
         this.localEngine.rotatePiece(action.direction);
-        if (this.isMultiplayer) this._sendInput(action);
+        if (sendNetwork) this._sendInput(action);
         break;
 
-      case 'hardDrop': {
-        const result = this.localEngine.hardDrop();
-        if (result) this._handleLockResult(result);
-        if (this.isMultiplayer) this._sendInput(action);
+      case 'hardDrop':
+        lockResult = this.localEngine.hardDrop();
+        if (sendNetwork) this._sendInput(action);
         break;
-      }
 
       case 'hold':
         this.localEngine.holdSwap();
-        if (this.isMultiplayer) this._sendInput(action);
+        if (sendNetwork) this._sendInput(action);
         break;
 
       case 'softDrop':
         this.localEngine.setSoftDrop(action.active);
-        if (this.isMultiplayer) this._sendInput(action);
+        if (sendNetwork) this._sendInput(action);
         break;
+    }
+
+    if (lockResult && emitFeedback) {
+      this._handleLockResult(lockResult);
     }
   }
 
@@ -561,8 +579,25 @@ export class GameManager {
       }
     }
 
-    if (result.attack > 0 && this.onAttack) {
+    if (!this.isMultiplayer && result.attack > 0 && this.onAttack) {
       this.onAttack(result);
+    }
+  }
+
+  _reconcileLocalState(snapshot, lastSequence = -1) {
+    if (!this.localEngine || !snapshot) return;
+
+    this.localEngine.loadState(snapshot);
+    this.pendingInputs = this.pendingInputs.filter(
+      input => input.sequence > lastSequence
+    );
+
+    for (const pending of this.pendingInputs) {
+      this._processAction(pending.action, {
+        sendNetwork: false,
+        emitFeedback: false,
+        resumeAudio: false
+      });
     }
   }
 
@@ -722,7 +757,7 @@ export class GameManager {
         this.opponentState.holdPiece,
         this.opponentState.nextQueue,
         0,
-        false
+        this._isOpponentPreviewMasked()
       );
     }
   }
@@ -745,25 +780,29 @@ export class GameManager {
       if (!this.isMultiplayer) return;
 
       this.opponentState = data.opponent;
+      this.opponentEffects = data.opponent?.effects || null;
 
       if (data.opponent && this.onOpponentStatsUpdate) {
         this.onOpponentStatsUpdate({
           score: data.opponent.score || 0,
           level: data.opponent.level || 1,
-          lines: data.opponent.lines || 0
+          lines: data.opponent.lines || 0,
+          combo: data.opponent.combo ?? -1
         });
       }
 
       if (data.self) {
-        this.pendingGarbage = data.self.pendingGarbage || 0;
-        if (data.self.effects) {
-          this._applyEffectsPayload(data.self.effects);
-        }
-
-        if (data.self.lastSequence !== undefined) {
+        if (data.self.snapshot) {
+          this._reconcileLocalState(data.self.snapshot, data.self.lastSequence);
+        } else if (data.self.lastSequence !== undefined) {
           this.pendingInputs = this.pendingInputs.filter(
             i => i.sequence > data.self.lastSequence
           );
+        }
+
+        this.pendingGarbage = data.self.pendingGarbage || 0;
+        if (data.self.effects) {
+          this._applyEffectsPayload(data.self.effects);
         }
       }
     };
@@ -780,6 +819,12 @@ export class GameManager {
 
     this.socketClient.onBonus = (data) => {
       this._applyBonusEvent(data);
+    };
+
+    this.socketClient.onAttack = (data) => {
+      if (this.onAttack) {
+        this.onAttack(data);
+      }
     };
 
     this.socketClient.onGameOver = (data) => {
@@ -889,6 +934,10 @@ export class GameManager {
     this.playerBoard = null;
     this.opponentBoard = null;
     this.localEngine = null;
+    this.opponentState = null;
+    this.opponentEffects = null;
+    this.pendingInputs = [];
+    this.pendingGarbage = 0;
     this._resetEffectState();
   }
 }

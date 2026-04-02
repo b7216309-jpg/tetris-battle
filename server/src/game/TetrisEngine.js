@@ -16,6 +16,7 @@ import { PieceGenerator } from './PieceGenerator.js';
 
 export class TetrisEngine {
   constructor(seed, options = {}) {
+    this.seed = seed;
     // Board: TOTAL_ROWS x BOARD_WIDTH, null = empty, string = piece type
     this.board = Array.from({ length: TOTAL_ROWS }, () => Array(BOARD_WIDTH).fill(null));
 
@@ -548,12 +549,62 @@ export class TetrisEngine {
       nextQueue: this.getNextQueue(),
       score: this.score,
       linesCleared: this.linesCleared,
+      startingLevel: this.startingLevel,
       level: this.level,
       combo: this.combo,
       backToBack: this.backToBack,
       isAlive: this.isAlive,
-      piecesPlaced: this.piecesPlaced
+      piecesPlaced: this.piecesPlaced,
+      gravityTimer: this.gravityTimer,
+      softDropping: this.softDropping,
+      lockDelayMs: this.lockDelayMs,
+      lockTimer: this.lockTimer,
+      lockResets: this.lockResets,
+      isOnGround: this.isOnGround,
+      lastAction: this.lastAction,
+      lastKickIndex: this.lastKickIndex,
+      lastAttackResult: this.lastAttackResult ? {
+        ...this.lastAttackResult,
+        clearedRows: [...(this.lastAttackResult.clearedRows || [])]
+      } : null,
+      generatorState: this.pieceGenerator.getState()
     };
+  }
+
+  loadState(state = {}) {
+    this.board = Array.isArray(state.board)
+      ? state.board.map(row => [...row])
+      : Array.from({ length: TOTAL_ROWS }, () => Array(BOARD_WIDTH).fill(null));
+
+    this.currentPiece = state.currentPiece ? { ...state.currentPiece } : null;
+    this.holdPiece = state.holdPiece ?? null;
+    this.holdUsed = Boolean(state.holdUsed);
+
+    this.score = state.score ?? 0;
+    this.linesCleared = state.linesCleared ?? 0;
+    this.startingLevel = state.startingLevel ?? this.startingLevel ?? 1;
+    this.level = state.level ?? this.startingLevel;
+    this.combo = state.combo ?? -1;
+    this.backToBack = state.backToBack ?? -1;
+    this.isAlive = state.isAlive ?? true;
+    this.piecesPlaced = state.piecesPlaced ?? 0;
+
+    this.gravityTimer = state.gravityTimer ?? 0;
+    this.softDropping = Boolean(state.softDropping);
+
+    this.lockDelayMs = Math.max(LOCK_DELAY, state.lockDelayMs ?? LOCK_DELAY);
+    this.lockTimer = state.lockTimer ?? 0;
+    this.lockResets = state.lockResets ?? 0;
+    this.isOnGround = state.isOnGround ?? (this.currentPiece ? this._isOnGround() : false);
+
+    this.lastAction = state.lastAction ?? null;
+    this.lastKickIndex = state.lastKickIndex ?? 0;
+    this.lastAttackResult = state.lastAttackResult ? {
+      ...state.lastAttackResult,
+      clearedRows: [...(state.lastAttackResult.clearedRows || [])]
+    } : null;
+
+    this.pieceGenerator.loadState(state.generatorState);
   }
 
   getVisibleBoard() {

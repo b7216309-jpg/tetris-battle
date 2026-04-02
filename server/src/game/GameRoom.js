@@ -78,6 +78,32 @@ export class GameRoom {
     };
   }
 
+  _serializePlayerState(player, now) {
+    return {
+      lastSequence: player.lastSequence,
+      pendingGarbage: player.garbage.getPendingLines(),
+      score: player.engine.score,
+      level: player.engine.level,
+      lines: player.engine.linesCleared,
+      combo: player.engine.combo,
+      isAlive: player.engine.isAlive,
+      effects: this._serializeEffects(player, now),
+      snapshot: player.engine.getState()
+    };
+  }
+
+  _serializeOpponentState(player, now) {
+    return {
+      ...player.engine.getBoardSnapshot(),
+      score: player.engine.score,
+      level: player.engine.level,
+      lines: player.engine.linesCleared,
+      combo: player.engine.combo,
+      backToBack: player.engine.backToBack,
+      effects: this._serializeEffects(player, now)
+    };
+  }
+
   _syncPlayerEffects(player, now) {
     const phaseShiftMs = this._getPhaseShiftRemainingMs(player, now);
     player.engine.setLockDelayMs(LOCK_DELAY + (phaseShiftMs > 0 ? BONUS_LOCK_DELAY_BOOST_MS : 0));
@@ -384,6 +410,7 @@ export class GameRoom {
     if (this.state !== 'PLAYING') return;
 
     const playerIds = [...this.players.keys()];
+    const now = Date.now();
 
     for (const id of playerIds) {
       const player = this.players.get(id);
@@ -393,21 +420,8 @@ export class GameRoom {
       if (!player || player.disconnected) continue;
 
       player.socket.emit('game:state', {
-        self: {
-          lastSequence: player.lastSequence,
-          pendingGarbage: player.garbage.getPendingLines(),
-          score: player.engine.score,
-          level: player.engine.level,
-          lines: player.engine.linesCleared,
-          isAlive: player.engine.isAlive,
-          effects: this._serializeEffects(player, Date.now())
-        },
-        opponent: opponent ? {
-          ...opponent.engine.getBoardSnapshot(),
-          score: opponent.engine.score,
-          level: opponent.engine.level,
-          lines: opponent.engine.linesCleared
-        } : null
+        self: this._serializePlayerState(player, now),
+        opponent: opponent ? this._serializeOpponentState(opponent, now) : null
       });
     }
   }

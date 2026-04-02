@@ -473,6 +473,8 @@ export class UIManager {
       this.overlay.querySelector('#hud-opp-score').textContent = stats.score.toLocaleString();
       this.overlay.querySelector('#hud-opp-level').textContent = stats.level;
       this.overlay.querySelector('#hud-opp-lines').textContent = stats.lines;
+      this.overlay.querySelector('#hud-opp-combo').textContent =
+        stats.combo >= 0 ? `x${stats.combo + 1}` : '-';
       this._oppScore = stats.score;
       this._updateLeadBar();
     };

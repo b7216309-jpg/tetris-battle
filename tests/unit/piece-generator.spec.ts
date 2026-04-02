@@ -222,4 +222,36 @@ test.describe('PieceGenerator - Unit Tests', () => {
     expect(result.count).toBeLessThanOrEqual(14);
     expect(result.count).toBeGreaterThanOrEqual(7);
   });
+
+  test('getState/loadState preserves the remaining sequence', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { PieceGenerator } = await import('@server/game/PieceGenerator.js');
+      const source = new PieceGenerator(77);
+
+      const consumed: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        consumed.push(source.next());
+      }
+
+      const saved = source.getState();
+      const restored = new PieceGenerator(999);
+      restored.loadState(saved);
+
+      const nextFromSource: string[] = [];
+      const nextFromRestored: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        nextFromSource.push(source.next());
+        nextFromRestored.push(restored.next());
+      }
+
+      return {
+        consumed,
+        nextFromSource,
+        nextFromRestored
+      };
+    });
+
+    expect(result.consumed).toHaveLength(6);
+    expect(result.nextFromRestored).toEqual(result.nextFromSource);
+  });
 });

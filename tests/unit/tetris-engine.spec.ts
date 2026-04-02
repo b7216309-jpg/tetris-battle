@@ -470,8 +470,8 @@ test.describe('TetrisEngine - Unit Tests', () => {
       const rowBefore = engine.currentPiece!.row;
 
       engine.setSoftDrop(true);
-      // Soft drop divides gravity by 20, so 1000/20 = 50ms per cell
-      // 250ms should move ~5 cells
+      // Soft drop uses the shared SOFT_DROP_FACTOR (currently 5),
+      // so 250ms should still move the piece faster than normal gravity.
       engine.updateGravity(250);
 
       return {
@@ -480,7 +480,7 @@ test.describe('TetrisEngine - Unit Tests', () => {
         dropped: engine.currentPiece!.row - rowBefore,
       };
     });
-    expect(result.dropped).toBeGreaterThanOrEqual(4);
+    expect(result.dropped).toBeGreaterThanOrEqual(1);
   });
 
   // ------- Game Over -------
@@ -717,6 +717,65 @@ test.describe('TetrisEngine - Unit Tests', () => {
     expect(result.score).toBe(0);
     expect(result.level).toBe(1);
     expect(result.isAlive).toBe(true);
+  });
+
+  test('loadState restores engine state and future piece order', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { TetrisEngine } = await import('@server/game/TetrisEngine.js');
+      const engine = new TetrisEngine(42);
+      engine.spawnPiece();
+      engine.movePiece(-1, 0);
+      engine.rotatePiece(1);
+      engine.setSoftDrop(true);
+      engine.updateGravity(250);
+      engine.setSoftDrop(false);
+      engine.holdSwap();
+
+      const saved = engine.getState();
+      const restored = new TetrisEngine(999);
+      restored.loadState(saved);
+
+      const before = {
+        board: restored.getVisibleBoard(),
+        currentPiece: restored.currentPiece,
+        holdPiece: restored.holdPiece,
+        nextQueue: restored.getNextQueue(),
+        score: restored.score,
+        level: restored.level,
+        combo: restored.combo,
+        piecesPlaced: restored.piecesPlaced
+      };
+
+      const sourceDrop = engine.hardDrop();
+      const restoredDrop = restored.hardDrop();
+
+      return {
+        before,
+        sourceAfter: {
+          board: engine.getVisibleBoard(),
+          currentPiece: engine.currentPiece,
+          holdPiece: engine.holdPiece,
+          nextQueue: engine.getNextQueue(),
+          score: engine.score,
+          piecesPlaced: engine.piecesPlaced
+        },
+        restoredAfter: {
+          board: restored.getVisibleBoard(),
+          currentPiece: restored.currentPiece,
+          holdPiece: restored.holdPiece,
+          nextQueue: restored.getNextQueue(),
+          score: restored.score,
+          piecesPlaced: restored.piecesPlaced
+        },
+        sourceDrop,
+        restoredDrop
+      };
+    });
+
+    expect(result.before.currentPiece).toBeTruthy();
+    expect(result.before.nextQueue).toHaveLength(5);
+    expect(result.restoredAfter).toEqual(result.sourceAfter);
+    expect(result.restoredDrop).toEqual(result.sourceDrop);
   });
 
   // ------- Ghost Piece -------

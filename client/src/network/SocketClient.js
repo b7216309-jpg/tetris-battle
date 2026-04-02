@@ -14,6 +14,7 @@ export class SocketClient {
     this.onOpponentDisconnect = null;
     this.onWaiting = null;
     this.onBonus = null;
+    this.onAttack = null;
 
     // Room callbacks
     this.onRoomCreated = null;
@@ -72,6 +73,10 @@ export class SocketClient {
 
     this.socket.on('game:bonus', (data) => {
       if (this.onBonus) this.onBonus(data);
+    });
+
+    this.socket.on('game:attack', (data) => {
+      if (this.onAttack) this.onAttack(data);
     });
 
     this.socket.on('game:opponent_disconnect', () => {
@@ -153,14 +158,7 @@ export class SocketClient {
   // Gameplay
   sendInput(action) {
     if (!this.socket) return;
-
-    // Use reliable emit for critical game-altering actions
-    const criticalActions = ['hardDrop', 'hold', 'rotate'];
-    if (criticalActions.includes(action.type)) {
-      this.socket.emit('game:input', action);
-    } else {
-      this.socket.volatile.emit('game:input', action);
-    }
+    this.socket.emit('game:input', action);
   }
 
   getSocketId() {
